@@ -55,7 +55,7 @@ final readonly class SiteAssignment
             }
         }
 
-        if (! in_array($data['role'], ['precinct', 'municipal', 'provincial', 'national'], true)
+        if (! in_array($data['role'], ['precinct', 'municipal', 'provincial', 'national', 'research'], true)
             || ! is_array($data['permitted_sources'] ?? null)
             || ! is_array($data['ceremonies'] ?? null)) {
             throw new RuntimeException('Site assignment role or permissions are invalid.');

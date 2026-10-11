@@ -17,6 +17,7 @@ final readonly class CeremonyProfile
         public array $stages,
         public array $ceremonies,
         public string $sha256,
+        public string $runType = 'pilot',
     ) {}
 
     public static function fromYaml(string $path): self
@@ -67,7 +68,13 @@ final readonly class CeremonyProfile
             ];
         }
 
-        return new self($data['id'], $data['version'], $stages, $ceremonies, hash('sha256', $bytes));
+        $runType = $data['run_type'] ?? 'pilot';
+
+        if (! in_array($runType, ['research', 'pilot', 'election_day'], true)) {
+            throw new InvalidArgumentException('Ceremony profile run type is invalid.');
+        }
+
+        return new self($data['id'], $data['version'], $stages, $ceremonies, hash('sha256', $bytes), $runType);
     }
 
     /** @return array{from: string, to: string, pipes: array<int, string>, evidence: array<int, string>} */

@@ -144,6 +144,20 @@ final readonly class ElectionBundleVerifier
                     }
                 }
 
+                if (isset($manifest['files']['reports/research-review.json']) || isset($manifest['files']['reports/review-decisions.jsonl'])) {
+                    $review = json_decode((string) $archive->getFromName('reports/research-review.json'), true);
+                    $ledger = $archive->getFromName('reports/review-decisions.jsonl');
+
+                    if (! isset($manifest['files']['reports/research-review.json'], $manifest['files']['reports/review-decisions.jsonl'])
+                        || ! is_array($review) || ! is_string($ledger)
+                        || ($review['schema_version'] ?? null) !== 'research-review-1'
+                        || ! preg_match('/^[a-f0-9]{64}$/', (string) ($review['input_bundle_sha256'] ?? ''))
+                        || ($review['national_coverage_ready'] ?? null) !== false
+                        || ! hash_equals((string) ($review['decision_ledger_sha256'] ?? ''), hash('sha256', $ledger))) {
+                        throw new RuntimeException('Research review evidence is invalid.');
+                    }
+                }
+
                 if (($manifest['coverage'] ?? null) === 'national') {
                     throw new RuntimeException('National coverage verification requires a reconciliation report.');
                 }

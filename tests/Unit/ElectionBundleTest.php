@@ -97,3 +97,67 @@ test('signed source snapshot remains unavailable for election day', function ():
         ->and(fn () => $commissioner->commission('run-1', $archivePath, $signed['document'], $signed['signature'], $keys, 'device-1', 'election_day', $directory.'/active'))
         ->toThrow(RuntimeException::class);
 });
+
+test('research commissioning requires a research profile and signed research assignment', function (): void {
+    $directory = sys_get_temp_dir().'/research-commission-test-'.bin2hex(random_bytes(5));
+    mkdir($directory);
+    $databasePath = $directory.'/election.sqlite';
+    $database = new PDO('sqlite:'.$databasePath);
+    $database->exec('CREATE TABLE precincts (id TEXT PRIMARY KEY)');
+    unset($database);
+    file_put_contents($directory.'/ceremonies.yaml', "id: research\nversion: 1\nrun_type: research\nstages: [provision, reviewing]\nceremonies:\n  begin_review:\n    from: provision\n    to: reviewing\n    pipes: []\n    evidence: []\n");
+    file_put_contents($directory.'/truth-qr.yaml', "id: election-v1\nversion: 1\nrecords:\n  ballot: {}\n");
+    $catalogHash = str_repeat('a', 64);
+    $popHash = str_repeat('b', 64);
+    file_put_contents($directory.'/report.json', json_encode(['schema_version' => 'national-source-snapshot-report-1', 'valid' => true, 'source_catalog_sha256' => $catalogHash, 'pop_sha256' => $popHash], JSON_THROW_ON_ERROR));
+    file_put_contents($directory.'/decisions.jsonl', '');
+    file_put_contents($directory.'/review.json', json_encode([
+        'schema_version' => 'research-review-1',
+        'input_bundle_sha256' => str_repeat('c', 64),
+        'decision_ledger_sha256' => hash('sha256', ''),
+        'national_coverage_ready' => false,
+    ], JSON_THROW_ON_ERROR));
+    $secret = sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair());
+    $public = sodium_crypto_sign_publickey_from_secretkey($secret);
+    $signatures = new AuthoritySignature;
+    $keys = [$signatures->keyId($public) => $public];
+    $archivePath = $directory.'/research.zip';
+    (new ElectionBundleBuilder(new RegistryDigest, $signatures))->build($databasePath, [
+        'profiles/ceremonies.yaml' => $directory.'/ceremonies.yaml',
+        'profiles/truth-qr.yaml' => $directory.'/truth-qr.yaml',
+        'reports/source-snapshot.json' => $directory.'/report.json',
+        'reports/research-review.json' => $directory.'/review.json',
+        'reports/review-decisions.jsonl' => $directory.'/decisions.jsonl',
+    ], ['bundle_id' => 'research-1', 'election_id' => 'election-1', 'coverage' => 'source_snapshot', 'source_catalog_sha256' => $catalogHash, 'pop_sha256' => $popHash], $secret, $archivePath);
+    $verifier = new ElectionBundleVerifier(new RegistryDigest, $signatures);
+    $bundle = $verifier->verify($archivePath, $keys);
+    $assignments = new SiteAssignment($signatures);
+    $assignment = $assignments->sign([
+        'bundle_id' => $bundle['bundle_id'],
+        'bundle_sha256' => $bundle['archive_sha256'],
+        'device_id' => 'research-workstation',
+        'role' => 'research',
+        'jurisdiction_id' => 'PH',
+        'permitted_sources' => [],
+        'ceremonies' => ['begin_review'],
+    ], $secret);
+    $commissioner = new BundleCommissioner($verifier, $assignments, new FileCeremonyStore($directory.'/state'));
+
+    expect(fn () => $commissioner->commission('wrong-type', $archivePath, $assignment['document'], $assignment['signature'], $keys, 'research-workstation', 'pilot', $directory.'/wrong-type'))
+        ->toThrow(RuntimeException::class);
+
+    $wrongRole = $assignments->sign([
+        'bundle_id' => $bundle['bundle_id'],
+        'bundle_sha256' => $bundle['archive_sha256'],
+        'device_id' => 'research-workstation',
+        'role' => 'precinct',
+        'jurisdiction_id' => 'PH',
+        'permitted_sources' => [],
+        'ceremonies' => ['begin_review'],
+    ], $secret);
+    expect(fn () => $commissioner->commission('wrong-role', $archivePath, $wrongRole['document'], $wrongRole['signature'], $keys, 'research-workstation', 'research', $directory.'/wrong-role'))
+        ->toThrow(RuntimeException::class);
+
+    expect($commissioner->commission('research-1', $archivePath, $assignment['document'], $assignment['signature'], $keys, 'research-workstation', 'research', $directory.'/active')['role'])
+        ->toBe('research');
+});

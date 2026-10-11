@@ -1,5 +1,11 @@
 # Election Ceremonies
 
+## Research review runs
+
+A ceremony profile may declare `run_type: research`. Research commissioning requires a signed source snapshot with `readiness: research`, a separately signed workstation assignment with `role: research`, and a matching research profile. The assignment lists the permitted ceremony IDs. Election-day commissioning continues to reject research bundles.
+
+The host supplies a named `ActorVerifier`, a durable `CeremonyStore`, and the profile's pipes. Review decisions and run events live outside the immutable source bundle. A closed run may export a decision ledger and `research-review-1` report; when both are included in a new signed bundle, the verifier checks the ledger hash and keeps readiness at research.
+
 Research source snapshots use `coverage: source_snapshot` and `readiness: research`. Their signed manifest includes POP and CLC catalog hashes, and the ZIP includes `reports/source-snapshot.json`. The verifier checks the report against the manifest. The commissioner refuses research or pilot bundles for election-day runs. National coverage and election-day readiness remain unavailable until a complete reconciliation and authority review workflow is implemented.
 
 `3neti/election-ceremonies` provides a country neutral, offline ceremony runner and signed election bundle format. It depends on `3neti/truth-qr` for QR record projection. Election rules, registry importers, and ceremony profiles belong in a country package; application screens, devices, storage paths, and officer authentication belong in the host.

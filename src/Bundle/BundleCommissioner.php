@@ -59,6 +59,19 @@ final readonly class BundleCommissioner
             unlink($temporaryProfile);
         }
 
+        if ($profile->runType !== $runType) {
+            throw new RuntimeException('Ceremony profile does not match the requested run type.');
+        }
+
+        if ($runType === 'research' && ($bundle['coverage'] !== 'source_snapshot'
+            || $bundle['readiness'] !== 'research' || $assignment['role'] !== 'research')) {
+            throw new RuntimeException('Research runs require a research source snapshot and assignment.');
+        }
+
+        if (array_diff($assignment['ceremonies'], array_keys($profile->ceremonies)) !== []) {
+            throw new RuntimeException('Site assignment permits a ceremony absent from the bundle profile.');
+        }
+
         if (is_dir($destination)) {
             throw new RuntimeException('Commissioned bundle destination already exists.');
         }
