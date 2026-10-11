@@ -114,6 +114,8 @@ test('research commissioning requires a research profile and signed research ass
     file_put_contents($directory.'/review.json', json_encode([
         'schema_version' => 'research-review-1',
         'input_bundle_sha256' => str_repeat('c', 64),
+        'pop_sha256' => $popHash,
+        'decision_event_count' => 0,
         'decision_ledger_sha256' => hash('sha256', ''),
         'national_coverage_ready' => false,
     ], JSON_THROW_ON_ERROR));
@@ -160,4 +162,18 @@ test('research commissioning requires a research profile and signed research ass
 
     expect($commissioner->commission('research-1', $archivePath, $assignment['document'], $assignment['signature'], $keys, 'research-workstation', 'research', $directory.'/active')['role'])
         ->toBe('research');
+
+    $wrongReview = json_decode((string) file_get_contents($directory.'/review.json'), true, flags: JSON_THROW_ON_ERROR);
+    $wrongReview['pop_sha256'] = str_repeat('d', 64);
+    file_put_contents($directory.'/review.json', json_encode($wrongReview, JSON_THROW_ON_ERROR));
+    $invalidArchive = $directory.'/mismatched-review.zip';
+    (new ElectionBundleBuilder(new RegistryDigest, $signatures))->build($databasePath, [
+        'profiles/ceremonies.yaml' => $directory.'/ceremonies.yaml',
+        'profiles/truth-qr.yaml' => $directory.'/truth-qr.yaml',
+        'reports/source-snapshot.json' => $directory.'/report.json',
+        'reports/research-review.json' => $directory.'/review.json',
+        'reports/review-decisions.jsonl' => $directory.'/decisions.jsonl',
+    ], ['bundle_id' => 'research-mismatch', 'election_id' => 'election-1', 'coverage' => 'source_snapshot', 'source_catalog_sha256' => $catalogHash, 'pop_sha256' => $popHash], $secret, $invalidArchive);
+
+    expect(fn () => $verifier->verify($invalidArchive, $keys))->toThrow(RuntimeException::class);
 });

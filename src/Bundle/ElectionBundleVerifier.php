@@ -150,8 +150,11 @@ final readonly class ElectionBundleVerifier
 
                     if (! isset($manifest['files']['reports/research-review.json'], $manifest['files']['reports/review-decisions.jsonl'])
                         || ! is_array($review) || ! is_string($ledger)
+                        || ($manifest['coverage'] ?? null) !== 'source_snapshot'
                         || ($review['schema_version'] ?? null) !== 'research-review-1'
+                        || ($review['pop_sha256'] ?? null) !== ($manifest['pop_sha256'] ?? null)
                         || ! preg_match('/^[a-f0-9]{64}$/', (string) ($review['input_bundle_sha256'] ?? ''))
+                        || ! is_int($review['decision_event_count'] ?? null) || $review['decision_event_count'] < 0
                         || ($review['national_coverage_ready'] ?? null) !== false
                         || ! hash_equals((string) ($review['decision_ledger_sha256'] ?? ''), hash('sha256', $ledger))) {
                         throw new RuntimeException('Research review evidence is invalid.');
