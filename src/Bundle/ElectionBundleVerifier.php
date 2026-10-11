@@ -38,7 +38,8 @@ final readonly class ElectionBundleVerifier
 
             if (! is_array($manifest) || ! is_array($signature)
                 || ($manifest['schema_version'] ?? null) !== 'election-bundle-1'
-                || ! in_array($manifest['coverage'] ?? null, ['pilot', 'national'], true)
+                || ! in_array($manifest['coverage'] ?? null, ['source_snapshot', 'pilot', 'national'], true)
+                || ($manifest['readiness'] ?? 'research') !== 'research'
                 || ! is_array($manifest['files'] ?? null)) {
                 throw new RuntimeException('Election bundle manifest is malformed.');
             }
@@ -132,6 +133,21 @@ final readonly class ElectionBundleVerifier
                     throw new RuntimeException('Election bundle registry digest is invalid.');
                 }
 
+                if (($manifest['coverage'] ?? null) === 'source_snapshot') {
+                    $report = json_decode((string) $archive->getFromName('reports/source-snapshot.json'), true);
+
+                    if (! is_array($report) || ($report['valid'] ?? null) !== true
+                        || ($report['schema_version'] ?? null) !== 'national-source-snapshot-report-1'
+                        || ($report['source_catalog_sha256'] ?? null) !== ($manifest['source_catalog_sha256'] ?? null)
+                        || ($report['pop_sha256'] ?? null) !== ($manifest['pop_sha256'] ?? null)) {
+                        throw new RuntimeException('Source snapshot validation report is invalid.');
+                    }
+                }
+
+                if (($manifest['coverage'] ?? null) === 'national') {
+                    throw new RuntimeException('National coverage verification requires a reconciliation report.');
+                }
+
                 $ceremonyProfile = $archive->getFromName('profiles/ceremonies.yaml');
                 $truthProfile = Yaml::parse((string) $archive->getFromName('profiles/truth-qr.yaml'));
 
@@ -149,7 +165,7 @@ final readonly class ElectionBundleVerifier
                     unlink($profilePath);
                 }
 
-                return [...$manifest, 'archive_sha256' => hash_file('sha256', $archivePath)];
+                return [...$manifest, 'readiness' => $manifest['readiness'] ?? 'research', 'archive_sha256' => hash_file('sha256', $archivePath)];
             } finally {
                 unlink($sqlitePath);
             }

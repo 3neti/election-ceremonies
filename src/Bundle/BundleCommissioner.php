@@ -34,8 +34,8 @@ final readonly class BundleCommissioner
         $bundle = $this->bundles->verify($archivePath, $trustedKeys);
         $assignment = $this->assignments->verify($assignmentDocument, $assignmentSignature, $trustedKeys, $bundle, $deviceId);
 
-        if ($runType === 'election_day' && $bundle['coverage'] !== 'national') {
-            throw new RuntimeException('Pilot election bundles cannot be commissioned for election day.');
+        if ($runType === 'election_day' && ($bundle['coverage'] !== 'national' || $bundle['readiness'] !== 'election_day')) {
+            throw new RuntimeException('Research or pilot election bundles cannot be commissioned for election day.');
         }
 
         $archive = new ZipArchive;
